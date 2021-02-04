@@ -1,0 +1,128 @@
+<tool id="rsem_alignment" name="RSEM Alignment" version="1.2.0">
+    <description>to transcriptome</description>
+    <requirements>
+        <requirement type="package" version="1.3.1">rsem</requirement>
+        <requirement type="package" version="2.3.4.1">bowtie2</requirement>
+    </requirements>
+    <stdio>
+         <exit_code range="1:" level="fatal" />
+    </stdio>
+    <command>
+        <![CDATA[
+            #if $qual.add == "unpaired_single_dataset"
+                python '${__tool_directory__}/rsem_alignment_single.py' $in_4 $in_5
+                "$qual.in_1" $in_3 "single" $in_6
+                && mv "single_rsem_stat" "$stats"
+            #else if $qual.add == "unpaired_collection"
+                python '${__tool_directory__}/rsem_alignment_single.py' $in_4 $in_5
+                "${qual.in_1}" $in_3 "${qual.in_1.element_identifier}" $in_6
+                && mv "${qual.in_1.element_identifier}"_rsem_stat "$stats"
+                && ls -la
+            #else if $qual.add == "paired_collection"
+                python '${__tool_directory__}/rsem_alignment.py' $in_4 $in_5
+                "${qual.in_1.forward}" "${qual.in_1.reverse}" $in_3 "${qual.in_1.element_identifier}" $in_6
+                && mv "${qual.in_1.element_identifier}"_rsem_stat "$stats"
+                && ls -la
+            #else
+                python '${__tool_directory__}/rsem_alignment.py' $in_4 $in_5
+                "$qual.in_1" "$qual.in_2" $in_3 "single" $in_6
+                && mv "single_rsem_stat" "$stats"
+            #end if
+        ]]>
+    </command>
+    <inputs>
+        <conditional name="qual">
+            <param name="add" type="select" label="Input Type">
+                <option value="unpaired_single_dataset">Unpaired reads</option>
+                <option value="paired_single_dataset">Paired reads</option>
+                <option value="unpaired_collection">Unpaired collection</option>
+                <option value="paired_collection">Paired collection</option>
+            </param>
+            <when value="unpaired_single_dataset">
+                <param format="fastq" name="in_1" type="data" label="Human Read"/>
+            </when>
+            <when value="paired_single_dataset">
+                <param format="fastq" name="in_1" type="data" label="Human Forward Reads"/>
+                <param format="fastq" name="in_2" type="data" label="Human Reverse Reads"/>
+            </when>
+            <when value="unpaired_collection">
+                <param name="in_1" format="fastqsanger" type="data_collection" collection_type="list" label="Select Human Reads Collection" help="Specify human reads dataset collection containing reads"/>
+            </when>
+            <when value="paired_collection">
+                <param name="in_1" format="fastqsanger" type="data_collection" collection_type="paired" label="Select Human Paired Reads Collection" help="Specify human reads paired dataset collection containing reads"/>
+            </when>		
+        </conditional>
+        <param format="txt" name="in_3" type="hidden" label="Reference Sample Name" value="Homo_sapiens"
+               help="This is the reference sample name, you specified during RSEM Prepare Reference e.g., Homo_sapiens. Please note, you must have run RSEM Prepare Reference tool with this reference name before running this tool."/>
+        <param format="txt" name="in_4" type="text" label="seed-length" value="25" help="Default is set to 25"/>
+        <param format="txt" name="in_5" type="text" label="strand-specific" value="0.5" help="Default is set to 0.5"/>
+        <param name="in_6" label="No. of Threads" type="integer" value="1" min="1" max="8"
+               help="Value must be between [1 - 8]" optional="false"/>
+    </inputs>
+    <outputs>
+        <data name="out_1_unpaired" format="bam" from_work_dir="unpaired_genome.genome.sorted.bam" label="RSEM Alignment BAM">
+            <filter>qual['add'] == 'unpaired_single_dataset'</filter>
+        </data>
+        <data name="out_1_paired" format="bam" from_work_dir="genome.genome.sorted.bam" label="RSEM Alignment BAM">
+            <filter>qual['add'] == 'paired_single_dataset'</filter>
+        </data>
+        <data name="out_2_unpaired" format="tabular" from_work_dir="unpaired_genome.genes.results" label="RSEM Alignment Genes Results">
+            <filter>qual['add'] == 'unpaired_single_dataset'</filter>
+        </data>
+        <data name="out_2_paired" format="tabular" from_work_dir="genome.genes.results" label="RSEM Alignment Genes Results">
+            <filter>qual['add'] == 'paired_single_dataset'</filter>
+        </data>
+        <data name="out_3_unpaired" format="tabular" from_work_dir="unpaired_genome.isoforms.results"
+              label="RSEM Alignment Isoforms Results">
+            <filter>qual['add'] == 'unpaired_single_dataset'</filter>
+        </data>
+        <data name="out_3_paired" format="tabular" from_work_dir="genome.isoforms.results"
+              label="RSEM Alignment Isoforms Results">
+            <filter>qual['add'] == 'paired_single_dataset'</filter>
+        </data>
+        <data name="stats"  format="txt" label="RSEM Statistics"/>
+        <collection name="list_output" type="list" label="RSEM Alignment Collection">
+            <data name="sortedbam" format="bam" from_work_dir="genome.genome.sorted.bam" hidden="true"/>
+            <data name="genes" format="tabular" from_work_dir="genome.genes.results" hidden="true"/>
+            <data name="isoforms" format="tabular" from_work_dir="genome.isoforms.results" hidden="true"/>
+            <filter>qual['add'] == 'paired_collection'</filter>
+        </collection>
+        <collection name="list_output_unpaired" type="list" label="RSEM Alignment Collection">
+            <data name="sortedbam_unpaired" format="bam" from_work_dir="unpaired_genome.genome.sorted.bam" hidden="true"/>
+            <data name="genes_unpaired" format="tabular" from_work_dir="unpaired_genome.genes.results" hidden="true"/>
+            <data name="isoforms_unpaired" format="tabular" from_work_dir="unpaired_genome.isoforms.results" hidden="true"/>
+            <filter>qual['add'] == 'unpaired_collection'</filter>
+        </collection>
+    </outputs>
+
+
+    <help>
+        .. class:: infomark
+
+        Align (filtered, trimmed) FastQ reads against human transcriptome.
+
+        .. class:: warningmark
+
+        Please note, *RSEM Prepare Reference tool* must have been run by administrator at Galaxy setup before executing this tool..
+
+        This tool has following input and output dataset/collections.
+
+        **Inputs**
+
+        - Input Type:
+
+          - Paired or unpaired Collection (Multiple Paired/Unpaired Samples): Human Reads Collection. Generated by Xenome Extract Human Reads tool.
+          - Single Dataset (Paired/Unpaired reads from one sample): Human Reads Dataset One and Two. Generated by Xenome Extract Human Reads tool.
+        - seed-length: Default is set to 25. Check documentation for further details http://deweylab.biostat.wisc.edu/rsem/rsem-calculate-expression.html.
+        - strand-specific: Default is set to 0.5. Check documentation for further details http://deweylab.biostat.wisc.edu/rsem/rsem-calculate-expression.html.
+
+
+        **Outputs**
+
+        Based on the input selection, one of the following will be output.
+
+        - List Collection (Multiple Samples): RSEM Alignment Collection.
+        - Three Dataset (One sample): RSEM Alignment BAM, RSEM Alignment Genes Results and RSEM Alignment Isoforms Results.
+        - RSEM Statistics
+    </help>
+</tool>
